@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>翻訳記録表</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --accent: #4c6ef5;
+    --accent-dark: #3b5bdb;
+    --text: #1f2430;
+    --text-sub: #6b7280;
+    --border: #e5e7eb;
+    --ja: #eef2ff;
+    --en: #f0fdf4;
+    --en-text: #166534;
+    --ja-text: #3730a3;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 64px;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .subtitle {
+    color: var(--text-sub);
+    font-size: 13px;
+    margin: 0 0 20px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-sub);
+    margin-bottom: 8px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 84px;
+    resize: vertical;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    line-height: 1.5;
+    background: #fafafe;
+  }
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: #fff;
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s ease;
+  }
+  button.primary:hover { background: var(--accent-dark); }
+  button.primary:disabled {
+    background: #a5b4fc;
+    cursor: not-allowed;
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--text-sub);
+  }
+  .result-box {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--en);
+    color: var(--en-text);
+    font-size: 15px;
+    display: none;
+  }
+  .result-box.show { display: block; }
+  .error-box {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #fef2f2;
+    color: var(--danger);
+    font-size: 13px;
+    display: none;
+  }
+  .error-box.show { display: block; }
+
+  .history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .history-header h2 {
+    font-size: 16px;
+    margin: 0;
+  }
+  .count-badge {
+    font-size: 12px;
+    color: var(--text-sub);
+  }
+
+  .day-group {
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--card);
+  }
+  .day-toggle {
+    width: 100%;
+    background: #fafbff;
+    border: none;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .day-toggle .meta {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-sub);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .day-toggle .arrow {
+    transition: transform .15s ease;
+    display: inline-block;
+  }
+  .day-group.open .day-toggle .arrow { transform: rotate(90deg); }
+  .day-body {
+    display: none;
+    padding: 4px 12px 12px;
+  }
+  .day-group.open .day-body { display: block; }
+
+  .entry {
+    display: flex;
+    gap: 10px;
+    padding: 10px 4px;
+    border-top: 1px solid var(--border);
+  }
+  .entry:first-child { border-top: none; }
+  .entry .time {
+    flex: 0 0 52px;
+    font-size: 11px;
+    color: var(--text-sub);
+    padding-top: 8px;
+  }
+  .entry .pair {
+    flex: 1;
+    min-width: 0;
+  }
+  .entry .ja, .entry .en {
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 4px;
+    word-break: break-word;
+  }
+  .entry .ja { background: var(--ja); color: var(--ja-text); }
+  .entry .en { background: var(--en); color: var(--en-text); }
+  .entry .del {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 6px;
+    align-self: flex-start;
+  }
+  .entry .del:hover { color: var(--danger); }
+
+  .empty {
+    text-align: center;
+    color: var(--text-sub);
+    font-size: 13px;
+    padding: 30px 10px;
+  }
+
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin .7s linear infinite;
+    vertical-align: -2px;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📝 翻訳記録表</h1>
+  <p class="subtitle">日本語を入力して翻訳すると、日付ごとに記録が残ります</p>
+
+  <div class="card">
+    <label for="jaInput">日本語で入力</label>
+    <textarea id="jaInput" placeholder="例）暑いね"></textarea>
+    <div class="actions">
+      <button class="primary" id="translateBtn" type="button">翻訳する</button>
+      <span class="hint">Ctrl (⌘) + Enter でも翻訳できます</span>
+    </div>
+    <div class="result-box" id="resultBox"></div>
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <div class="history-header">
+    <h2>記録一覧</h2>
+    <span class="count-badge" id="countBadge"></span>
+  </div>
+  <div id="historyList"></div>
+</div>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'translationLogRecords_v1';
+  const jaInput = document.getElementById('jaInput');
+  const translateBtn = document.getElementById('translateBtn');
+  const resultBox = document.getElementById('resultBox');
+  const errorBox = document.getElementById('errorBox');
+  const historyList = document.getElementById('historyList');
+  const countBadge = document.getElementById('countBadge');
+
+  // openState keeps track of which date groups are expanded across re-renders
+  const openState = {};
+
+  function loadRecords() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      console.error('failed to load records', e);
+      return [];
+    }
+  }
+
+  function saveRecords(records) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function dateKey(d) {
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function formatDateLabel(key) {
+    const [y, m, d] = key.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    const todayKey = dateKey(new Date());
+    const yestKey = dateKey(new Date(Date.now() - 86400000));
+    let suffix = '';
+    if (key === todayKey) suffix = '（今日）';
+    else if (key === yestKey) suffix = '（昨日）';
+    return `${y}年${m}月${d}日（${weekdays[dt.getDay()]}）${suffix}`;
+  }
+
+  function formatTime(d) {
+    return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function render() {
+    const records = loadRecords();
+    countBadge.textContent = records.length ? `全 ${records.length} 件` : '';
+
+    if (!records.length) {
+      historyList.innerHTML = '<div class="empty">まだ記録がありません。翻訳すると、ここに一覧が表示されます。</div>';
+      return;
+    }
+
+    // group by date
+    const groups = {};
+    records.forEach((r) => {
+      if (!groups[r.dateKey]) groups[r.dateKey] = [];
+      groups[r.dateKey].push(r);
+    });
+
+    const sortedKeys = Object.keys(groups).sort((a, b) => (a < b ? 1 : -1));
+
+    // default: open the most recent day if openState is empty
+    if (Object.keys(openState).length === 0 && sortedKeys.length) {
+      openState[sortedKeys[0]] = true;
+    }
+
+    historyList.innerHTML = sortedKeys.map((key) => {
+      const items = groups[key].sort((a, b) => b.timestamp - a.timestamp);
+      const isOpen = !!openState[key];
+      const entriesHtml = items.map((r) => `
+        <div class="entry" data-id="${r.id}">
+          <div class="time">${formatTime(new Date(r.timestamp))}</div>
+          <div class="pair">
+            <div class="ja">🇯🇵 ${escapeHtml(r.ja)}</div>
+            <div class="en">🇬🇧 ${escapeHtml(r.en)}</div>
+          </div>
+          <button class="del" title="削除" data-del="${r.id}">✕</button>
+        </div>
+      `).join('');
+
+      return `
+        <div class="day-group ${isOpen ? 'open' : ''}" data-key="${key}">
+          <button class="day-toggle" data-toggle="${key}">
+            <span>${formatDateLabel(key)}</span>
+            <span class="meta">${items.length} 件 <span class="arrow">▶</span></span>
+          </button>
+          <div class="day-body">${entriesHtml}</div>
+        </div>
+      `;
+    }).join('');
+
+    // wire up toggle + delete
+    historyList.querySelectorAll('[data-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-toggle');
+        openState[key] = !openState[key];
+        render();
+      });
+    });
+    historyList.querySelectorAll('[data-del]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-del');
+        const remaining = loadRecords().filter((r) => String(r.id) !== String(id));
+        saveRecords(remaining);
+        render();
+      });
+    });
+  }
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+  }
+  function clearError() {
+    errorBox.textContent = '';
+    errorBox.classList.remove('show');
+  }
+  function showResult(text) {
+    resultBox.textContent = '🇬🇧 ' + text;
+    resultBox.classList.add('show');
+  }
+
+  async function translateJaToEn(text) {
+    const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=ja|en';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('翻訳サーバーへの接続に失敗しました（HTTP ' + res.status + '）');
+    const data = await res.json();
+    if (!data || !data.responseData || !data.responseData.translatedText) {
+      throw new Error('翻訳結果を取得できませんでした');
+    }
+    return data.responseData.translatedText;
+  }
+
+  async function handleTranslate() {
+    const text = jaInput.value.trim();
+    clearError();
+    resultBox.classList.remove('show');
+    if (!text) {
+      showError('日本語を入力してください');
+      return;
+    }
+
+    translateBtn.disabled = true;
+    translateBtn.innerHTML = '<span class="spinner"></span>翻訳中…';
+
+    try {
+      const en = await translateJaToEn(text);
+      showResult(en);
+
+      const now = new Date();
+      const records = loadRecords();
+      records.push({
+        id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        ja: text,
+        en: en,
+        dateKey: dateKey(now),
+        timestamp: now.getTime(),
+      });
+      saveRecords(records);
+
+      // make sure today's group is expanded so the new entry is visible
+      openState[dateKey(now)] = true;
+
+      jaInput.value = '';
+      render();
+    } catch (err) {
+      console.error(err);
+      showError('翻訳に失敗しました。しばらくしてから再度お試しください。（' + err.message + '）');
+    } finally {
+      translateBtn.disabled = false;
+      translateBtn.textContent = '翻訳する';
+    }
+  }
+
+  translateBtn.addEventListener('click', handleTranslate);
+  jaInput.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleTranslate();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
