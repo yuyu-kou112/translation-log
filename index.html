@@ -7,13 +7,14 @@
   v1.3  Enterキーで翻訳を実行できるように対応
   v1.4  スマホ(日本語IME)でもEnterキーの翻訳が確実に動くよう修正(beforeinput方式に変更)
   v1.5  タイトル横にバージョン表示を追加
+  v1.6  翻訳エンジンをGoogle翻訳相当のものに変更(より自然な訳に)、英訳のコピー機能を追加
 -->
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>翻訳記録表</title>
-<link rel="preconnect" href="https://api.mymemory.translated.net">
+<link rel="preconnect" href="https://translate.googleapis.com">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="翻訳記録表">
@@ -242,7 +243,13 @@
     gap: 8px;
   }
   .entry .en .en-text { flex: 1; }
-  .speak-btn {
+  .en-actions, .result-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .speak-btn, .copy-btn {
     flex: 0 0 auto;
     background: none;
     border: none;
@@ -252,7 +259,8 @@
     padding: 2px 4px;
     color: var(--en-text);
   }
-  .speak-btn:hover { opacity: .65; }
+  .speak-btn:hover, .copy-btn:hover { opacity: .65; }
+  .speak-btn:disabled, .copy-btn:disabled { opacity: .5; cursor: default; }
   .no-tts .speak-btn { display: none; }
   .entry .del {
     flex: 0 0 auto;
@@ -288,7 +296,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📝 翻訳記録表 <span class="version-badge" title="更新履歴はHTMLソース先頭のコメントを参照">v1.5</span></h1>
+  <h1>📝 翻訳記録表 <span class="version-badge" title="更新履歴はHTMLソース先頭のコメントを参照">v1.6</span></h1>
   <p class="subtitle">日本語を入力して翻訳すると、日付ごとに記録が残ります</p>
 
   <div class="card">
@@ -397,7 +405,10 @@
             <div class="ja">🇯🇵 ${escapeHtml(r.ja)}</div>
             <div class="en">
               <span class="en-text">🇬🇧 ${escapeHtml(r.en)}</span>
-              <button class="speak-btn" type="button" data-speak="${escapeHtml(r.en)}" title="読み上げ">🔊</button>
+              <span class="en-actions">
+                <button class="speak-btn" type="button" data-speak="${escapeHtml(r.en)}" title="読み上げ">🔊</button>
+                <button class="copy-btn" type="button" data-copy="${escapeHtml(r.en)}" title="コピー">📋</button>
+              </span>
             </div>
           </div>
           <button class="del" title="削除" data-del="${r.id}">✕</button>
@@ -434,6 +445,42 @@
     historyList.querySelectorAll('[data-speak]').forEach((btn) => {
       btn.addEventListener('click', () => speakEnglish(btn.getAttribute('data-speak')));
     });
+    historyList.querySelectorAll('[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', () => copyText(btn.getAttribute('data-copy'), btn));
+    });
+  }
+
+  async function copyText(text, btn) {
+    if (!text) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // クリップボードAPIが使えない環境向けのフォールバック
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      flashCopied(btn);
+    } catch (e) {
+      console.error('copy failed', e);
+    }
+  }
+
+  function flashCopied(btn) {
+    if (!btn) return;
+    const original = btn.textContent;
+    btn.textContent = '✅';
+    btn.disabled = true;
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.disabled = false;
+    }, 1200);
   }
 
   const ttsSupported = 'speechSynthesis' in window;
@@ -458,21 +505,32 @@
   }
   function showResult(text) {
     resultBox.innerHTML = `<span class="result-text">🇬🇧 ${escapeHtml(text)}</span>` +
-      `<button class="speak-btn" type="button" id="resultSpeakBtn" title="読み上げ">🔊</button>`;
+      `<span class="result-actions">` +
+      `<button class="speak-btn" type="button" id="resultSpeakBtn" title="読み上げ">🔊</button>` +
+      `<button class="copy-btn" type="button" id="resultCopyBtn" title="コピー">📋</button>` +
+      `</span>`;
     resultBox.classList.add('show');
     const speakBtn = document.getElementById('resultSpeakBtn');
     if (speakBtn) speakBtn.addEventListener('click', () => speakEnglish(text));
+    const copyBtn = document.getElementById('resultCopyBtn');
+    if (copyBtn) copyBtn.addEventListener('click', () => copyText(text, copyBtn));
   }
 
   async function translateJaToEn(text) {
-    const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=ja|en';
+    // Google翻訳と同じ翻訳エンジンを使う無料の仕組み（APIキー不要）。
+    // レスポンスは入れ子の配列形式で返ってくる。
+    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=en&dt=t&q=' + encodeURIComponent(text);
     const res = await fetch(url);
     if (!res.ok) throw new Error('翻訳サーバーへの接続に失敗しました（HTTP ' + res.status + '）');
     const data = await res.json();
-    if (!data || !data.responseData || !data.responseData.translatedText) {
+    if (!data || !Array.isArray(data[0])) {
       throw new Error('翻訳結果を取得できませんでした');
     }
-    return data.responseData.translatedText;
+    const translated = data[0].map((segment) => (segment && segment[0]) || '').join('');
+    if (!translated) {
+      throw new Error('翻訳結果を取得できませんでした');
+    }
+    return translated;
   }
 
   async function handleTranslate() {
