@@ -113,10 +113,15 @@
     border-radius: 10px;
     background: var(--en);
     color: var(--en-text);
-    font-size: 15px;
+    font-size: 19px;
+    font-weight: 600;
     display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
   }
-  .result-box.show { display: block; }
+  .result-box.show { display: flex; }
+  .result-box .result-text { flex: 1; word-break: break-word; }
   .error-box {
     margin-top: 14px;
     padding: 12px 14px;
@@ -207,7 +212,29 @@
     word-break: break-word;
   }
   .entry .ja { background: var(--ja); color: var(--ja-text); }
-  .entry .en { background: var(--en); color: var(--en-text); }
+  .entry .en {
+    background: var(--en);
+    color: var(--en-text);
+    font-size: 17px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .entry .en .en-text { flex: 1; }
+  .speak-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 17px;
+    line-height: 1;
+    padding: 2px 4px;
+    color: var(--en-text);
+  }
+  .speak-btn:hover { opacity: .65; }
+  .no-tts .speak-btn { display: none; }
   .entry .del {
     flex: 0 0 auto;
     background: none;
@@ -349,7 +376,10 @@
           <div class="time">${formatTime(new Date(r.timestamp))}</div>
           <div class="pair">
             <div class="ja">🇯🇵 ${escapeHtml(r.ja)}</div>
-            <div class="en">🇬🇧 ${escapeHtml(r.en)}</div>
+            <div class="en">
+              <span class="en-text">🇬🇧 ${escapeHtml(r.en)}</span>
+              <button class="speak-btn" type="button" data-speak="${escapeHtml(r.en)}" title="読み上げ">🔊</button>
+            </div>
           </div>
           <button class="del" title="削除" data-del="${r.id}">✕</button>
         </div>
@@ -382,6 +412,21 @@
         render();
       });
     });
+    historyList.querySelectorAll('[data-speak]').forEach((btn) => {
+      btn.addEventListener('click', () => speakEnglish(btn.getAttribute('data-speak')));
+    });
+  }
+
+  const ttsSupported = 'speechSynthesis' in window;
+  if (!ttsSupported) document.body.classList.add('no-tts');
+
+  function speakEnglish(text) {
+    if (!ttsSupported || !text) return;
+    window.speechSynthesis.cancel(); // 前の読み上げが残っていたら止めてから話す
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'en-US';
+    utter.rate = 0.95;
+    window.speechSynthesis.speak(utter);
   }
 
   function showError(msg) {
@@ -393,8 +438,11 @@
     errorBox.classList.remove('show');
   }
   function showResult(text) {
-    resultBox.textContent = '🇬🇧 ' + text;
+    resultBox.innerHTML = `<span class="result-text">🇬🇧 ${escapeHtml(text)}</span>` +
+      `<button class="speak-btn" type="button" id="resultSpeakBtn" title="読み上げ">🔊</button>`;
     resultBox.classList.add('show');
+    const speakBtn = document.getElementById('resultSpeakBtn');
+    if (speakBtn) speakBtn.addEventListener('click', () => speakEnglish(text));
   }
 
   async function translateJaToEn(text) {
