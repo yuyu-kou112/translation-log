@@ -1,4 +1,13 @@
 <!DOCTYPE html>
+<!--
+  翻訳記録表 - 更新履歴
+  v1.0  初回リリース（日本語→英語翻訳、日付ごとの記録一覧）
+  v1.1  Service Workerによるキャッシュ追加（2回目以降の表示を高速化）
+  v1.2  英語テキストを拡大表示、読み上げ(TTS)ボタンを追加
+  v1.3  Enterキーで翻訳を実行できるように対応
+  v1.4  スマホ(日本語IME)でもEnterキーの翻訳が確実に動くよう修正(beforeinput方式に変更)
+  v1.5  タイトル横にバージョン表示を追加
+-->
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -43,6 +52,16 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .version-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-sub);
+    background: #eef0f4;
+    border: 1px solid var(--border);
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: .02em;
   }
   .subtitle {
     color: var(--text-sub);
@@ -269,7 +288,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📝 翻訳記録表</h1>
+  <h1>📝 翻訳記録表 <span class="version-badge" title="更新履歴はHTMLソース先頭のコメントを参照">v1.5</span></h1>
   <p class="subtitle">日本語を入力して翻訳すると、日付ごとに記録が残ります</p>
 
   <div class="card">
@@ -277,7 +296,7 @@
     <textarea id="jaInput" placeholder="例）暑いね"></textarea>
     <div class="actions">
       <button class="primary" id="translateBtn" type="button">翻訳する</button>
-      <span class="hint">Enterキーで翻訳／改行はShift+Enter</span>
+      <span class="hint">Enterキーで翻訳できます</span>
     </div>
     <div class="result-box" id="resultBox"></div>
     <div class="error-box" id="errorBox"></div>
@@ -498,13 +517,26 @@
   }
 
   translateBtn.addEventListener('click', handleTranslate);
-  jaInput.addEventListener('keydown', (e) => {
-    // Enterキーで翻訳（スマホの改行/確定キーも含む）。Shift+Enterは通常通り改行する。
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-      e.preventDefault();
-      handleTranslate();
-    }
-  });
+
+  // スマホ(特に日本語IME)では、Enterキーを押したときに常にkeydownイベントが
+  // 期待通り発火するとは限らないため、"beforeinput" + inputType が
+  // 使える場合はそちらを優先して使う（IME変換確定のEnterでは insertLineBreak は
+  // 発生しないため、変換確定と改行入力を自然に区別できる）。
+  if (window.InputEvent && 'onbeforeinput' in jaInput) {
+    jaInput.addEventListener('beforeinput', (e) => {
+      if (e.inputType === 'insertLineBreak') {
+        e.preventDefault();
+        handleTranslate();
+      }
+    });
+  } else {
+    jaInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) {
+        e.preventDefault();
+        handleTranslate();
+      }
+    });
+  }
 
   render();
 
