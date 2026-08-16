@@ -277,7 +277,7 @@
     <textarea id="jaInput" placeholder="例）暑いね"></textarea>
     <div class="actions">
       <button class="primary" id="translateBtn" type="button">翻訳する</button>
-      <span class="hint">Ctrl (⌘) + Enter でも翻訳できます</span>
+      <span class="hint">Enterキーで翻訳／改行はShift+Enter</span>
     </div>
     <div class="result-box" id="resultBox"></div>
     <div class="error-box" id="errorBox"></div>
@@ -499,7 +499,8 @@
 
   translateBtn.addEventListener('click', handleTranslate);
   jaInput.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    // Enterキーで翻訳（スマホの改行/確定キーも含む）。Shift+Enterは通常通り改行する。
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       handleTranslate();
     }
