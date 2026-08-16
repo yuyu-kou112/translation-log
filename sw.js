@@ -1,6 +1,6 @@
 // 翻訳記録表 - Service Worker
 // キャッシュを使って、2回目以降のアクセスを高速化する（stale-while-revalidate）
-const CACHE_NAME = 'translation-log-v1';
+const CACHE_NAME = 'translation-log-v2';
 const APP_SHELL = ['./index.html'];
 
 self.addEventListener('install', (event) => {
