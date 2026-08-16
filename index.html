@@ -8,6 +8,7 @@
   v1.4  スマホ(日本語IME)でもEnterキーの翻訳が確実に動くよう修正(beforeinput方式に変更)
   v1.5  タイトル横にバージョン表示を追加
   v1.6  翻訳エンジンをGoogle翻訳相当のものに変更(より自然な訳に)、英訳のコピー機能を追加
+  v1.7  「解説」ボタンを追加(文中の主な単語の意味を英英辞書+簡易和訳で表示、無料版)
 -->
 <html lang="ja">
 <head>
@@ -15,6 +16,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>翻訳記録表</title>
 <link rel="preconnect" href="https://translate.googleapis.com">
+<link rel="preconnect" href="https://api.dictionaryapi.dev">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="翻訳記録表">
@@ -133,14 +135,17 @@
     border-radius: 10px;
     background: var(--en);
     color: var(--en-text);
-    font-size: 19px;
-    font-weight: 600;
     display: none;
+  }
+  .result-box.show { display: block; }
+  .result-row {
+    display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    font-size: 19px;
+    font-weight: 600;
   }
-  .result-box.show { display: flex; }
   .result-box .result-text { flex: 1; word-break: break-word; }
   .error-box {
     margin-top: 14px;
@@ -249,7 +254,7 @@
     align-items: center;
     gap: 2px;
   }
-  .speak-btn, .copy-btn {
+  .speak-btn, .copy-btn, .explain-btn {
     flex: 0 0 auto;
     background: none;
     border: none;
@@ -259,9 +264,49 @@
     padding: 2px 4px;
     color: var(--en-text);
   }
-  .speak-btn:hover, .copy-btn:hover { opacity: .65; }
-  .speak-btn:disabled, .copy-btn:disabled { opacity: .5; cursor: default; }
+  .speak-btn:hover, .copy-btn:hover, .explain-btn:hover { opacity: .65; }
+  .speak-btn:disabled, .copy-btn:disabled, .explain-btn:disabled { opacity: .5; cursor: default; }
   .no-tts .speak-btn { display: none; }
+
+  .explain-panel {
+    display: none;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: #f8f9ff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .explain-panel.open { display: block; }
+  .explain-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-sub);
+    margin-bottom: 8px;
+  }
+  .explain-item {
+    padding: 6px 0;
+    border-top: 1px solid var(--border);
+  }
+  .explain-item:first-of-type { border-top: none; padding-top: 0; }
+  .explain-word-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .explain-word { font-weight: 700; color: var(--accent-dark); }
+  .explain-pos {
+    font-size: 11px;
+    color: var(--text-sub);
+    background: #eef0f4;
+    padding: 1px 7px;
+    border-radius: 999px;
+  }
+  .explain-ja { font-size: 12px; color: var(--ja-text); }
+  .explain-def { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+  .explain-loading, .explain-empty { color: var(--text-sub); font-size: 13px; }
   .entry .del {
     flex: 0 0 auto;
     background: none;
@@ -296,7 +341,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📝 翻訳記録表 <span class="version-badge" title="更新履歴はHTMLソース先頭のコメントを参照">v1.6</span></h1>
+  <h1>📝 翻訳記録表 <span class="version-badge" title="更新履歴はHTMLソース先頭のコメントを参照">v1.7</span></h1>
   <p class="subtitle">日本語を入力して翻訳すると、日付ごとに記録が残ります</p>
 
   <div class="card">
@@ -408,8 +453,10 @@
               <span class="en-actions">
                 <button class="speak-btn" type="button" data-speak="${escapeHtml(r.en)}" title="読み上げ">🔊</button>
                 <button class="copy-btn" type="button" data-copy="${escapeHtml(r.en)}" title="コピー">📋</button>
+                <button class="explain-btn" type="button" data-explain="${escapeHtml(r.en)}" data-target="explain-${r.id}" title="単語の意味を見る">📖</button>
               </span>
             </div>
+            <div class="explain-panel" id="explain-${r.id}"></div>
           </div>
           <button class="del" title="削除" data-del="${r.id}">✕</button>
         </div>
@@ -447,6 +494,13 @@
     });
     historyList.querySelectorAll('[data-copy]').forEach((btn) => {
       btn.addEventListener('click', () => copyText(btn.getAttribute('data-copy'), btn));
+    });
+    historyList.querySelectorAll('[data-explain]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const text = btn.getAttribute('data-explain');
+        const panel = document.getElementById(btn.getAttribute('data-target'));
+        handleExplainClick(btn, text, panel);
+      });
     });
   }
 
@@ -495,6 +549,102 @@
     window.speechSynthesis.speak(utter);
   }
 
+  // ---- 単語の意味（解説）機能 ----
+  // 文法・熟語の"深い"解説ではなく、文中の主な単語について
+  // 英英辞書の意味＋簡易的な日本語訳を表示する簡易版。
+  const EXPLAIN_STOPWORDS = new Set([
+    'a', 'an', 'the', 'is', 'am', 'are', 'was', 'were', 'to', 'of', 'in', 'on', 'at',
+    'it', 'i', 'you', 'he', 'she', 'we', 'they', 'this', 'that', 'and', 'or', 'as'
+  ]);
+
+  function tokenizeForExplain(text) {
+    const raw = (text || '').split(/\s+/);
+    const seen = new Set();
+    const words = [];
+    raw.forEach((tok) => {
+      const cleaned = tok.replace(/^[^a-zA-Z']+|[^a-zA-Z']+$/g, '');
+      if (!cleaned) return;
+      const lower = cleaned.toLowerCase();
+      if (EXPLAIN_STOPWORDS.has(lower)) return;
+      if (seen.has(lower)) return;
+      seen.add(lower);
+      words.push(cleaned);
+    });
+    return words.slice(0, 10); // 多くなりすぎないよう最大10語まで
+  }
+
+  async function fetchWordInfo(word) {
+    const lower = word.toLowerCase();
+    const [dictResult, jaResult] = await Promise.allSettled([
+      fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(lower))
+        .then((r) => (r.ok ? r.json() : null)),
+      translateEnToJa(word),
+    ]);
+
+    let pos = '';
+    let definition = '';
+    if (dictResult.status === 'fulfilled' && Array.isArray(dictResult.value) && dictResult.value[0]) {
+      const meanings = dictResult.value[0].meanings || [];
+      if (meanings[0]) {
+        pos = meanings[0].partOfSpeech || '';
+        const def = meanings[0].definitions && meanings[0].definitions[0];
+        if (def) definition = def.definition || '';
+      }
+    }
+    const ja = jaResult.status === 'fulfilled' ? jaResult.value : '';
+    return { word, pos, definition, ja };
+  }
+
+  function renderExplainList(infos) {
+    const items = infos.map((info) => {
+      const posLabel = info.pos ? `<span class="explain-pos">${escapeHtml(info.pos)}</span>` : '';
+      const jaLabel = info.ja ? `<span class="explain-ja">${escapeHtml(info.ja)}</span>` : '';
+      const defLine = info.definition ? `<div class="explain-def">${escapeHtml(info.definition)}</div>` : '';
+      return `
+        <div class="explain-item">
+          <div class="explain-word-row">
+            <span class="explain-word">${escapeHtml(info.word)}</span>
+            ${posLabel}
+            ${jaLabel}
+          </div>
+          ${defLine}
+        </div>
+      `;
+    }).join('');
+    return `<div class="explain-title">📖 主な単語の意味（英英辞書＋簡易訳）</div>${items}`;
+  }
+
+  async function handleExplainClick(btn, text, panel) {
+    if (!panel) return;
+    const isOpen = panel.classList.contains('open');
+    if (isOpen) {
+      panel.classList.remove('open');
+      return;
+    }
+    panel.classList.add('open');
+    if (panel.dataset.loaded === '1') return; // 取得済みなら再取得せず表示するだけ
+
+    panel.innerHTML = '<div class="explain-loading"><span class="spinner"></span>解説を取得中…</div>';
+    btn.disabled = true;
+    try {
+      const words = tokenizeForExplain(text);
+      if (!words.length) {
+        panel.innerHTML = '<div class="explain-empty">解説できる単語が見つかりませんでした</div>';
+      } else {
+        const infos = await Promise.all(
+          words.map((w) => fetchWordInfo(w).catch(() => ({ word: w, pos: '', definition: '', ja: '' })))
+        );
+        panel.innerHTML = renderExplainList(infos);
+      }
+      panel.dataset.loaded = '1';
+    } catch (e) {
+      console.error('explain failed', e);
+      panel.innerHTML = '<div class="explain-empty">解説の取得に失敗しました</div>';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   function showError(msg) {
     errorBox.textContent = msg;
     errorBox.classList.add('show');
@@ -504,22 +654,31 @@
     errorBox.classList.remove('show');
   }
   function showResult(text) {
-    resultBox.innerHTML = `<span class="result-text">🇬🇧 ${escapeHtml(text)}</span>` +
-      `<span class="result-actions">` +
-      `<button class="speak-btn" type="button" id="resultSpeakBtn" title="読み上げ">🔊</button>` +
-      `<button class="copy-btn" type="button" id="resultCopyBtn" title="コピー">📋</button>` +
-      `</span>`;
+    resultBox.innerHTML = `
+      <div class="result-row">
+        <span class="result-text">🇬🇧 ${escapeHtml(text)}</span>
+        <span class="result-actions">
+          <button class="speak-btn" type="button" id="resultSpeakBtn" title="読み上げ">🔊</button>
+          <button class="copy-btn" type="button" id="resultCopyBtn" title="コピー">📋</button>
+          <button class="explain-btn" type="button" id="resultExplainBtn" title="単語の意味を見る">📖</button>
+        </span>
+      </div>
+      <div class="explain-panel" id="resultExplainPanel"></div>
+    `;
     resultBox.classList.add('show');
     const speakBtn = document.getElementById('resultSpeakBtn');
     if (speakBtn) speakBtn.addEventListener('click', () => speakEnglish(text));
     const copyBtn = document.getElementById('resultCopyBtn');
     if (copyBtn) copyBtn.addEventListener('click', () => copyText(text, copyBtn));
+    const explainBtn = document.getElementById('resultExplainBtn');
+    const explainPanel = document.getElementById('resultExplainPanel');
+    if (explainBtn) explainBtn.addEventListener('click', () => handleExplainClick(explainBtn, text, explainPanel));
   }
 
-  async function translateJaToEn(text) {
+  async function translateText(text, sl, tl) {
     // Google翻訳と同じ翻訳エンジンを使う無料の仕組み（APIキー不要）。
     // レスポンスは入れ子の配列形式で返ってくる。
-    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=en&dt=t&q=' + encodeURIComponent(text);
+    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + sl + '&tl=' + tl + '&dt=t&q=' + encodeURIComponent(text);
     const res = await fetch(url);
     if (!res.ok) throw new Error('翻訳サーバーへの接続に失敗しました（HTTP ' + res.status + '）');
     const data = await res.json();
@@ -532,6 +691,9 @@
     }
     return translated;
   }
+
+  async function translateJaToEn(text) { return translateText(text, 'ja', 'en'); }
+  async function translateEnToJa(text) { return translateText(text, 'en', 'ja'); }
 
   async function handleTranslate() {
     const text = jaInput.value.trim();
