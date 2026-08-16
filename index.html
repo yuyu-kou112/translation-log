@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>翻訳記録表</title>
+<link rel="preconnect" href="https://api.mymemory.translated.net">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="翻訳記録表">
+<meta name="theme-color" content="#4c6ef5">
 <style>
   :root {
     --bg: #f6f7fb;
@@ -453,6 +458,13 @@
   });
 
   render();
+
+  // Register service worker so repeat visits load instantly from cache.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch((e) => console.error('SW register failed', e));
+    });
+  }
 })();
 </script>
 </body>
